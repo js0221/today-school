@@ -1,0 +1,17 @@
+{
+  "school": {
+    "name": "",
+    "office": "",
+    "code": ""
+  },
+  "allergies": [],
+  "timetable": {
+    "2": [
+      {
+        "subject": "국어",
+        "supplies": ""
+      }
+    ]
+  },
+  "exams": []
+}

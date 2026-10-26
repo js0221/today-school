@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>오늘의 학교 v2.7 · 학생 승인 관리</title>
+  <link rel="stylesheet" href="/static/style.css?v=2.7">
+  <script src="/static/script.js?v=2.7" defer></script>
+</head>
+<body>
+  <aside>
+    <a class="brand" href="/">오늘의 학교<span>VERSION 2.7 · APPROVAL</span></a>
+    <nav id="navigation" aria-label="주 메뉴" hidden>
+      <button data-page="home" class="active">01　오늘 한눈에</button>
+      <button data-page="meals">02　급식 · 내 알레르기</button>
+      <button data-page="timetable">03　시간표 · 준비물</button>
+      <button data-page="exams">04　내 시험 · 공부 계획</button>
+      <button data-page="settings">05　학교 정보</button>
+      <button data-page="students" id="students-nav" hidden>06　학생 가입 승인</button>
+    </nav>
+    <p class="aside-note">학생은 신청하고,<br>관리자는 확인합니다.</p>
+  </aside>
+
+  <main>
+    <header>
+      <div><p class="eyebrow" id="today">SCHOOL COMPANION · VERSION 2</p><h1 id="title">학생 로그인</h1></div>
+      <div class="account-tools"><span class="badge" id="account">가입 승인 후 이용</span><button id="logout" hidden>로그아웃</button></div>
+    </header>
+    <p id="notice" role="status" aria-live="polite"></p>
+
+    <section id="auth-area">
+      <div class="welcome"><span>CHECK IN TO YOUR SCHOOL</span><h2 id="auth-heading">우리 학교의 하루, 내 계정으로.</h2><p id="auth-description">학번과 이름으로 가입 신청하고, 관리자 승인 후 로그인하세요.</p></div>
+      <p id="admin-setup" class="setup-hint" hidden>최초 관리자를 아직 만들지 않았습니다. VS Code 터미널에서 <code>python app.py --create-admin</code>을 실행해 관리자 ID와 비밀번호를 설정하세요.</p>
+      <div class="grid auth-grid">
+        <article class="card">
+          <span class="tag" id="login-tag">STUDENT LOGIN</span><h2 id="login-heading">학생 로그인</h2>
+          <form id="login-form">
+            <label><span id="login-label">학번</span><input id="login-id" autocomplete="username" required maxlength="40" placeholder="예: 10101"></label>
+            <label>비밀번호<input id="login-password" type="password" autocomplete="current-password" required maxlength="128"></label>
+            <button class="primary" type="submit">로그인</button>
+          </form>
+          <p class="muted" id="login-help">아직 승인되지 않았다면 관리자에게 학번과 이름을 확인해 달라고 요청하세요.</p>
+        </article>
+        <article class="card" id="registration-card">
+          <span class="tag">REQUEST ACCESS</span><h2>학생 가입 신청</h2>
+          <form id="register-form">
+            <label>학번<input id="register-id" inputmode="numeric" pattern="[0-9]{3,12}" placeholder="예: 10101" required maxlength="12"></label>
+            <label>이름<input id="register-name" autocomplete="name" placeholder="본인 이름" minlength="2" maxlength="30" required></label>
+            <label>비밀번호<input id="register-password" type="password" autocomplete="new-password" minlength="4" maxlength="10" placeholder="4~10자" required></label>
+            <label>비밀번호 확인<input id="register-confirm" type="password" autocomplete="new-password" minlength="4" maxlength="10" required></label>
+            <button class="primary" type="submit">가입 승인 요청</button>
+          </form>
+          <p class="muted">신청만으로 로그인할 수 없습니다. 관리자가 명단과 대조해 승인해야 합니다.</p>
+        </article>
+      </div>
+    </section>
+
+    <div id="application" hidden>
+      <article class="card class-picker">
+        <form id="class-form" class="inline">
+          <label>내가 볼 학년<select id="view-grade"><option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option></select></label>
+          <label>반<input id="view-class" type="number" min="1" max="40" value="1" required></label>
+          <label>시간표 조회 주<select id="view-week"><option value="1">이번 주</option><option value="2">다음 주</option></select></label>
+        </form>
+        <p class="muted">학년·반을 선택하면 해당 학급의 시간표를 자동으로 가져옵니다.</p><p id="class-summary" class="muted" aria-live="polite"></p>
+      </article>
+      <section id="home" class="page">
+        <div class="welcome"><span>READY FOR TODAY</span><h2 id="greeting">오늘도, 차근차근 시작해요.</h2><p id="school-heading">학교를 준비하고 있어요.</p></div>
+        <div class="grid">
+          <article class="card"><div class="card-head"><h2>오늘의 급식</h2><span class="tag">MENU</span></div><div id="home-meal"></div><p class="muted">번호 표기 누락과 교차 접촉은 판단하지 못합니다. 학교의 원재료 안내도 확인하세요.</p></article>
+          <article class="card"><div class="card-head"><h2>오늘 수업과 준비물</h2><span class="tag">CLASS</span></div><div id="home-lessons"></div></article>
+          <article class="card wide"><div class="card-head"><h2>내 시험 일정</h2><span class="tag">D-DAY</span></div><div id="home-exams"></div></article>
+        </div>
+      </section>
+
+      <section id="meals" class="page" hidden>
+        <article class="card">
+          <h2>내 알레르기 직접 입력</h2><p class="muted">알레르기가 있는 식품을 쉼표로 구분해 적어 주세요. 이 내용은 내 계정에 저장됩니다.</p>
+          <form id="allergy-form"><label>알레르기 식품 이름<textarea id="allergy-text" rows="3" maxlength="500" placeholder="예: 계란, 우유, 땅콩"></textarea></label><button class="primary">내 알레르기 저장</button></form><p id="allergy-guide" class="muted"></p>
+        </article>
+        <article class="card"><h2>날짜별 급식</h2><form id="meal-form" class="inline"><label>조회 날짜<input id="meal-date" type="date" required></label><button class="primary">급식 조회</button></form><div id="meal-result"></div><p class="muted">나이스의 알레르기 번호를 비교합니다. 자동 인식되지 않은 식품은 직접 확인해야 하며, 경고가 없어도 안전을 보장하지 않습니다.</p></article>
+      </section>
+
+      <section id="timetable" class="page" hidden>
+        <article class="card" id="comcigan-editor" hidden>
+          <span class="tag">COMCIGAN · ADMIN ONLY</span><h2>컴시간알리미에서 자동으로 가져오기</h2>
+          <p class="muted">위에서 학년·반과 이번 주/다음 주를 선택하세요. 학교를 검색하면 해당 학급의 시간표를 미리 볼 수 있습니다.</p>
+          <form id="comcigan-search-form" class="inline"><label>컴시간 학교 이름<input id="comcigan-school-name" minlength="2" maxlength="80" placeholder="예: 세명컴퓨터고" required></label><button type="submit" class="primary">컴시간 학교 찾기</button></form>
+          <div id="comcigan-schools"></div>
+          <div id="comcigan-preview" hidden>
+            <h3 id="comcigan-preview-title"></h3><p id="comcigan-preview-info" class="muted"></p><div id="comcigan-preview-table" class="student-table"></div>
+            <p class="publish-warning">미리보기는 학생에게 보이지 않습니다. 아래 ‘저장 · 학생에게 공개’를 눌러야 학생이 볼 수 있습니다.</p><p class="muted">저장하면 선택한 학급·주의 월~금 시간표를 이 내용으로 바꿉니다. 같은 요일·교시의 과목이 그대로인 준비물은 유지합니다.</p>
+            <button type="button" id="import-comcigan" class="primary">이 시간표 저장 · 학생에게 공개</button>
+          </div>
+        </article>
+        <article class="card"><div class="card-head"><h2>요일별 시간표</h2><div class="timetable-tools"><button type="button" id="refresh-timetable">최신 시간표 새로고침</button><label>요일<select id="weekday"></select></label></div></div><p id="timetable-guide" class="muted"></p>
+          <form id="timetable-form"><div id="lesson-editor"></div><div class="actions" id="timetable-actions" hidden><button type="button" id="add-lesson">+ 교시 추가</button><button type="button" id="clear-lessons" class="danger">요일 전체 비우기</button><button class="primary">시간표 저장</button></div></form>
+        </article>
+      </section>
+
+      <section id="exams" class="page" hidden>
+        <article class="card"><h2>내 시험 일정 등록</h2><form id="exam-form" class="inline"><label>시험 이름<input id="exam-name" placeholder="예: 2학기 기말고사" required maxlength="100"></label><label>시험 날짜<input id="exam-date" type="date" required></label><button class="primary">시험 추가</button></form></article><div id="exam-list"></div>
+      </section>
+
+      <section id="settings" class="page" hidden>
+        <article class="card"><h2>우리 학교</h2><div id="current-school"></div><p class="muted" id="school-guide"></p></article>
+        <article class="card" id="school-editor" hidden><h2>학교 이름으로 검색</h2><p class="muted">학교 이름만 입력하세요. 주소와 학교 코드는 자동으로 찾습니다.</p><form id="school-form" class="inline"><label>학교 이름<input id="school-search" minlength="2" maxlength="80" placeholder="학교 이름 입력" required></label><button class="primary">학교 찾기</button></form><p id="school-search-message" class="muted"></p><div id="school-results"></div></article>
+      </section>
+
+      <section id="students" class="page" hidden>
+        <article class="card"><div class="card-head"><h2>학생 가입 승인</h2><button id="refresh-students">목록 새로고침</button></div><p class="muted">학번과 이름을 실제 학생 명단과 대조한 뒤 승인하세요. 승인을 취소하면 학생의 기존 로그인도 종료됩니다. 학생 삭제는 계정과 개인 데이터를 완전히 지우므로 학번과 이름을 확인하세요.</p><div id="student-list"></div></article>
+      </section>
+    </div>
+    <footer>오늘의 학교 v2 · 학번과 이름으로 신청하고, 승인 후 사용하기</footer>
+  </main>
+</body>
+</html>
