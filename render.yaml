@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: today-school
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.9
+      - key: DATABASE_URL
+        sync: false
+      - key: INITIAL_ADMIN_ID
+        sync: false
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false
+      - key: COMCIGAN_SCHOOL_CODE
+        value: "53127"
+      - key: COMCIGAN_SCHOOL_NAME
+        value: 세명컴퓨터고
+      - key: COMCIGAN_SCHOOL_REGION
+        value: 서울

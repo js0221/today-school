@@ -1,5 +1,6 @@
 """오늘의 학교 v2 · Python 3.10+ · 외부 패키지 불필요."""
 import argparse
+import os
 import getpass
 import hashlib
 import hmac
@@ -19,7 +20,14 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parent
-DB_PATH = ROOT / 'school_v2.db'
+DATA_DIR = Path(os.environ.get('SCHOOL_DATA_DIR', str(ROOT))).resolve()
+DB_PATH = DATA_DIR / 'school_v2.db'
+PUBLIC_ORIGIN = os.environ.get('PUBLIC_ORIGIN', os.environ.get('RENDER_EXTERNAL_URL', '')).rstrip('/')
+if PUBLIC_ORIGIN:
+    public_url = urlsplit(PUBLIC_ORIGIN)
+    if (public_url.scheme != 'https' or not public_url.hostname or public_url.username
+            or public_url.password or public_url.path or public_url.query or public_url.fragment):
+        raise RuntimeError('PUBLIC_ORIGIN must be an HTTPS origin without a path')
 CONFIG_PATH = ROOT / 'config.json'
 VERSION = '2.7 · 접근 보안 강화'
 DEFAULT_PORT = 5001
@@ -39,6 +47,10 @@ def fail(status, message):
 
 
 def connect():
+    database_url = os.environ.get('DATABASE_URL', '').strip()
+    if database_url:
+        from postgres_backend import PostgresConnection
+        return PostgresConnection(database_url)
     db = sqlite3.connect(DB_PATH, timeout=10)
     db.row_factory = sqlite3.Row
     db.execute('PRAGMA foreign_keys=ON')
@@ -46,6 +58,7 @@ def connect():
 
 
 def initialize():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     with connect() as db:
         db.executescript('''
         CREATE TABLE IF NOT EXISTS users (
@@ -67,6 +80,30 @@ def initialize():
         );
         ''')
         db.execute("UPDATE sessions SET expires=MIN(expires,?) WHERE user_id IN (SELECT id FROM users WHERE role='admin')", (time.time() + 1800,))
+
+
+def initialize_hosted_settings():
+    if not PUBLIC_ORIGIN:
+        return
+    if not os.environ.get('DATABASE_URL', '').strip():
+        raise RuntimeError('Set DATABASE_URL before deploying; temporary SQLite storage is disabled')
+    with connect() as db:
+        db.execute('BEGIN IMMEDIATE')
+        if not db.execute("SELECT 1 FROM users WHERE role='admin'").fetchone():
+            login = os.environ.get('INITIAL_ADMIN_ID', '').strip()
+            password = os.environ.get('INITIAL_ADMIN_PASSWORD', '')
+            if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{2,29}', login) or not 4 <= len(password) <= 10:
+                raise RuntimeError('Set INITIAL_ADMIN_ID and INITIAL_ADMIN_PASSWORD in hosting secrets')
+            db.execute("INSERT INTO users(login,name,password,role,status,created) VALUES (?,'관리자',?,'admin','approved',?)",
+                       (login, password_hash(password), time.time()))
+        school_code = os.environ.get('COMCIGAN_SCHOOL_CODE', '')
+        if school_code and not setting(db, 'comcigan_school', {}):
+            code = int(school_code)
+            if not 1 <= code <= 99999999:
+                raise RuntimeError('Invalid COMCIGAN_SCHOOL_CODE')
+            set_setting(db, 'comcigan_school', {'code': code,
+                'name': os.environ.get('COMCIGAN_SCHOOL_NAME', ''),
+                'region': os.environ.get('COMCIGAN_SCHOOL_REGION', '')})
 
 
 def text(value, label, limit=100, required=True):
@@ -293,7 +330,8 @@ class Handler(BaseHTTPRequestHandler):
         db.execute('INSERT INTO sessions VALUES (?,?,?,?)',
             (hashlib.sha256(token.encode()).hexdigest(), csrf, user_id, time.time() + lifetime))
         db.commit()
-        self.new_cookie = f'school_session={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={lifetime}'
+        secure = '; Secure' if PUBLIC_ORIGIN else ''
+        self.new_cookie = f'school_session={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={lifetime}{secure}'
         return csrf
 
     def user(self, db, login_session, admin=False):
@@ -315,14 +353,22 @@ class Handler(BaseHTTPRequestHandler):
         try:
             host = self.headers.get('Host', '')
             port = getattr(self.server, 'server_port', DEFAULT_PORT)
-            if host not in {f'127.0.0.1:{port}', f'localhost:{port}'}:
+            allowed_hosts = {f'127.0.0.1:{port}', f'localhost:{port}'}
+            if PUBLIC_ORIGIN:
+                allowed_hosts.add(urlsplit(PUBLIC_ORIGIN).netloc)
+            if len(self.headers.get_all('Host', [])) != 1 or host not in allowed_hosts:
                 fail(403, f'http://127.0.0.1:{port} 으로 접속하세요.')
             if method == 'POST':
                 origin = self.headers.get('Origin')
-                if (origin and origin != 'http://' + host) or self.headers.get('Sec-Fetch-Site') == 'cross-site':
+                expected_origin = PUBLIC_ORIGIN if PUBLIC_ORIGIN and host == urlsplit(PUBLIC_ORIGIN).netloc else 'http://' + host
+                if (origin and origin != expected_origin) or self.headers.get('Sec-Fetch-Site') == 'cross-site':
                     fail(403, '다른 사이트에서 보낸 요청입니다.')
             url = urlsplit(self.path)
             path, query = url.path, parse_qs(url.query)
+            if method == 'GET' and path == '/healthz':
+                with connect() as health_db:
+                    health_db.execute('SELECT 1').fetchone()
+                return self.reply(200, {'status': 'ok'})
             if path == '/admin/':
                 path = '/admin'
             static = {
@@ -634,7 +680,7 @@ DUMMY_HASH = password_hash('dummy-password-for-timing')
 def main():
     parser = argparse.ArgumentParser(description='오늘의 학교 v2')
     parser.add_argument('--create-admin', action='store_true', help='최초 관리자 계정 생성')
-    parser.add_argument('--port', type=int, default=DEFAULT_PORT,
+    parser.add_argument('--port', type=int, default=int(os.environ.get('PORT', DEFAULT_PORT)),
                         help=f'로컬 서버 포트 (기본 {DEFAULT_PORT})')
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
@@ -646,7 +692,11 @@ def main():
         for name in missing:
             print(f'  누락: {ROOT / name}')
         return 1
+    if PUBLIC_ORIGIN and not os.environ.get('DATABASE_URL', '').strip():
+        parser.error('DATABASE_URL is required for hosted deployments')
     initialize()
+    if not args.create_admin:
+        initialize_hosted_settings()
     if args.create_admin:
         with connect() as db:
             if db.execute("SELECT 1 FROM users WHERE role='admin'").fetchone():
@@ -667,7 +717,7 @@ def main():
             print('관리자를 생성했습니다. python app.py 실행 후 /admin에서 로그인하세요.')
         return
     try:
-        server = BoundedHTTPServer(('127.0.0.1', args.port), Handler)
+        server = BoundedHTTPServer(('0.0.0.0' if PUBLIC_ORIGIN else '127.0.0.1', args.port), Handler)
     except OSError as error:
         if error.errno in {48, 98, 10048} or getattr(error, 'winerror', None) == 10048:
             print(f'서버 시작 실패: {args.port}번 포트를 다른 프로그램이 사용 중입니다.')
