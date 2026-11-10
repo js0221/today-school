@@ -72,17 +72,18 @@ async function showSession() {
     $('#login-id').placeholder = ADMIN_PAGE ? '관리자 ID 입력' : '예: 10101';
     $('#registration-card').hidden = ADMIN_PAGE;
     $('#auth-heading').textContent = ADMIN_PAGE ? '학교의 하루를 관리하는 공간.' : '우리 학교의 하루, 내 계정으로.';
-    $('#auth-description').textContent = ADMIN_PAGE ? '학생 가입 승인, 학교 등록, 시간표 편집은 관리자만 할 수 있습니다.' : '학번과 이름으로 가입 신청하고, 관리자 승인 후 로그인하세요.';
+    $('#auth-description').textContent = ADMIN_PAGE ? '학생 가입 승인, 학생 알레르기 확인, 시간표 관리는 관리자만 할 수 있습니다.' : '학번과 이름으로 가입 신청하고, 관리자 승인 후 로그인하세요.';
     $('#login-help').textContent = ADMIN_PAGE ? '관리자 계정은 서버의 터미널에서 처음 한 번 생성합니다.' : '아직 승인되지 않았다면 관리자에게 학번과 이름을 확인해 달라고 요청하세요.';
     for (const job of mealJobs.values()) job.abort();
     mealJobs.clear();
     return false;
   }
-  $('#school-editor').hidden = !isAdmin();
+  $('#school-editor').hidden = true;
   $('#comcigan-editor').hidden = !isAdmin();
   $('#timetable-actions').hidden = !isAdmin();
   $('#timetable-guide').textContent = isAdmin() ? '추가·삭제 후 저장하세요. 삭제하면 뒤 교시가 앞으로 이동합니다. 공강은 ‘공강’으로 입력하세요.' : '학생은 시간표를 확인할 수 있습니다. 수정이 필요하면 관리자에게 알려 주세요.';
-  $('#school-guide').textContent = isAdmin() ? '아래에서 학교 이름만 입력해 검색할 수 있습니다.' : '학교 이름과 주소는 관리자가 등록한 정보입니다.';
+  $('#school-guide').hidden = isAdmin();
+  $('#school-guide').textContent = '학교 이름과 주소는 관리자가 등록한 정보입니다.';
   return true;
 }
 function go(page, reloadData=true) {
@@ -134,9 +135,13 @@ function render() {
   $('#greeting').textContent = `${auth.user.name}님, 오늘도 차근차근 시작해요.`;
   $('#school-heading').textContent = data.school.name || '관리자가 학교를 등록하면 급식을 확인할 수 있어요.';
   $('#current-school').replaceChildren();
-  const name = document.createElement('h3'); name.textContent = data.school.name || '등록된 학교가 없습니다.';
-  const address = document.createElement('p'); address.textContent = data.school.address || '';
-  $('#current-school').append(name, address);
+  const name = document.createElement('h3');
+  name.textContent = isAdmin() ? '세명컴퓨터고등학교' : (data.school.name || '등록된 학교가 없습니다.');
+  $('#current-school').append(name);
+  if (!isAdmin()) {
+    const address = document.createElement('p'); address.textContent = data.school.address || '';
+    $('#current-school').append(address);
+  }
   $('#allergy-text').value = data.allergy_text;
   if (!$('#comcigan-school-name').value) $('#comcigan-school-name').value = data.comcigan_school.name || (data.school.name || '').replace(/고등학교$/, '고').replace(/중학교$/, '중');
 
@@ -199,7 +204,7 @@ async function loadStudents() {
   const result=await api('/api/admin/students');
   studentRows = result.students;
   const names={pending:'승인 대기', approved:'승인됨', rejected:'거절 · 이용 제한'};
-  $('#student-list').innerHTML=result.students.length ? `<div class="student-table"><table><thead><tr><th>학번</th><th>이름</th><th>상태</th><th>관리</th></tr></thead><tbody>${result.students.map(s=>`<tr><td>${esc(s.student_id)}</td><td>${esc(s.name)}</td><td><span class="status ${s.status}">${names[s.status]}</span></td><td><button type="button" data-student="${s.id}" data-status="approved">승인</button> <button type="button" data-student="${s.id}" data-status="rejected" class="danger">거절 · 승인 취소</button> <button type="button" data-student="${s.id}" data-status="pending">대기로 변경</button> <button type="button" class="danger" data-delete-student="${s.id}">학생 삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">아직 가입 신청이 없습니다.</p>';
+  $('#student-list').innerHTML=result.students.length ? `<div class="student-table"><table><thead><tr><th>학번</th><th>이름</th><th>학생이 입력한 알레르기</th><th>상태</th><th>관리</th></tr></thead><tbody>${result.students.map(s=>`<tr><td>${esc(s.student_id)}</td><td>${esc(s.name)}</td><td class="student-allergy">${esc(s.allergy_text || '입력하지 않음')}</td><td><span class="status ${s.status}">${names[s.status]}</span></td><td><button type="button" data-student="${s.id}" data-status="approved">승인</button> <button type="button" data-student="${s.id}" data-status="rejected" class="danger">거절 · 승인 취소</button> <button type="button" data-student="${s.id}" data-status="pending">대기로 변경</button> <button type="button" class="danger" data-delete-student="${s.id}">학생 삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">아직 가입 신청이 없습니다.</p>';
 }
 
 $('#login-form').onsubmit=e=>{ e.preventDefault(); run(async()=>{
@@ -372,6 +377,16 @@ document.addEventListener('keydown', event => {
       return;
     }
     location.assign('/admin');
+    return;
+  }
+  if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && key === 's' && (ADMIN_PAGE || isAdmin())) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (event.repeat) return;
+    run(async () => {
+      if (auth?.user) await api('/api/logout', 'POST', {});
+      location.assign('/');
+    }, true);
     return;
   }
   const inspect = command && (event.shiftKey || event.altKey) && ['i','j','c'].includes(key);

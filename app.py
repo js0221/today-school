@@ -29,7 +29,7 @@ if PUBLIC_ORIGIN:
             or public_url.password or public_url.path or public_url.query or public_url.fragment):
         raise RuntimeError('PUBLIC_ORIGIN must be an HTTPS origin without a path')
 CONFIG_PATH = ROOT / 'config.json'
-VERSION = '2.7 · 접근 보안 강화'
+VERSION = '2.8 · 관리자 편의와 알레르기 조회'
 DEFAULT_PORT = 5001
 ALLERGENS = dict(enumerate(['난류', '우유', '메밀', '땅콩', '대두', '밀', '고등어', '게', '새우',
     '돼지고기', '복숭아', '토마토', '아황산류', '호두', '닭고기', '쇠고기', '오징어', '조개류', '잣'], 1))
@@ -533,7 +533,7 @@ class Handler(BaseHTTPRequestHandler):
                 db.commit()
                 return self.reply(200, {'message': '내 알레르기를 저장했습니다.'})
             if method == 'GET' and path == '/api/admin/students':
-                rows = db.execute("SELECT id,login AS student_id,name,status FROM users WHERE role='student' ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, login").fetchall()
+                rows = db.execute("SELECT id,login AS student_id,name,status,allergies AS allergy_text FROM users WHERE role='student' ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, login").fetchall()
                 return self.reply(200, {'students': [dict(row) for row in rows]})
             if method == 'POST' and path == '/api/admin/delete-student':
                 target = body.get('id')

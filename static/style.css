@@ -5,3 +5,5 @@ textarea{font:inherit;display:block;resize:vertical;width:100%;padding:14px;marg
 .class-picker .inline{margin:0}.class-picker label{min-width:100px}.class-picker p{margin-bottom:0}#comcigan-preview{margin-top:24px}#comcigan-preview table{min-width:500px}#comcigan-editor h2{margin-top:12px}
 
 .publish-warning{padding:14px 18px;border-radius:9px;background:#fff0db;color:#87561b;font-size:14px;line-height:1.8}.unpublished{color:#a26525!important}.timetable-tools{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+
+.student-allergy{white-space:pre-wrap;overflow-wrap:anywhere;min-width:150px;max-width:280px}
